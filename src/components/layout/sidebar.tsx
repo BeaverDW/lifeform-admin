@@ -5,11 +5,8 @@ import Link from "next/link"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
-  Users,
+  MessageSquare,
   Settings,
-  FileText,
-  BarChart3,
-  Package,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
@@ -25,15 +22,12 @@ import {
 import { Separator } from "@/components/ui/separator"
 
 const navItems = [
-  { title: "Dashboard", href: "/", icon: LayoutDashboard },
-  { title: "Users", href: "/users", icon: Users },
-  { title: "Products", href: "/products", icon: Package },
-  { title: "Orders", href: "/orders", icon: FileText },
-  { title: "Analytics", href: "/analytics", icon: BarChart3 },
+  { title: "대시보드", href: "/", icon: LayoutDashboard },
+  { title: "상담 신청", href: "/consultations", icon: MessageSquare },
 ]
 
 const bottomNavItems = [
-  { title: "Settings", href: "/settings", icon: Settings },
+  { title: "설정", href: "/settings", icon: Settings },
 ]
 
 export function Sidebar() {
@@ -52,13 +46,13 @@ export function Sidebar() {
         <div className="flex h-14 items-center border-b px-4">
           {!collapsed && (
             <Link href="/" className="flex items-center gap-2 font-semibold">
-              <Package className="size-5 text-sidebar-primary" />
+              <LayoutDashboard className="size-5 text-sidebar-primary" />
               <span>Lifeform Admin</span>
             </Link>
           )}
           {collapsed && (
             <Link href="/" className="mx-auto">
-              <Package className="size-5 text-sidebar-primary" />
+              <LayoutDashboard className="size-5 text-sidebar-primary" />
             </Link>
           )}
         </div>

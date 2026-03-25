@@ -1,206 +1,141 @@
-import { AdminLayout } from "@/components/layout/admin-layout"
+import { AdminLayout } from "@/components/layout/admin-layout";
+import { createClient } from "@/lib/supabase/server";
 import {
   Card,
   CardContent,
   CardDescription,
   CardHeader,
   CardTitle,
-} from "@/components/ui/card"
-import { Badge } from "@/components/ui/badge"
-import {
-  Users,
-  DollarSign,
-  ShoppingCart,
-  TrendingUp,
-  ArrowUpRight,
-  ArrowDownRight,
-} from "lucide-react"
+} from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
+import { MessageSquare, Wifi, Refrigerator, Clock } from "lucide-react";
 
-const stats = [
-  {
-    title: "Total Users",
-    value: "12,345",
-    change: "+12.5%",
-    trend: "up" as const,
-    icon: Users,
-  },
-  {
-    title: "Revenue",
-    value: "$54,321",
-    change: "+8.2%",
-    trend: "up" as const,
-    icon: DollarSign,
-  },
-  {
-    title: "Orders",
-    value: "1,234",
-    change: "-3.1%",
-    trend: "down" as const,
-    icon: ShoppingCart,
-  },
-  {
-    title: "Growth",
-    value: "23.5%",
-    change: "+4.3%",
-    trend: "up" as const,
-    icon: TrendingUp,
-  },
-]
+function formatDate(dateStr: string) {
+  const date = new Date(dateStr);
+  return new Intl.DateTimeFormat("ko-KR", {
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(date);
+}
 
-const recentOrders = [
-  {
-    id: "ORD-001",
-    customer: "John Doe",
-    amount: "$250.00",
-    status: "Completed",
-  },
-  {
-    id: "ORD-002",
-    customer: "Jane Smith",
-    amount: "$180.00",
-    status: "Processing",
-  },
-  {
-    id: "ORD-003",
-    customer: "Bob Johnson",
-    amount: "$320.00",
-    status: "Completed",
-  },
-  {
-    id: "ORD-004",
-    customer: "Alice Brown",
-    amount: "$95.00",
-    status: "Pending",
-  },
-  {
-    id: "ORD-005",
-    customer: "Charlie Wilson",
-    amount: "$410.00",
-    status: "Completed",
-  },
-]
+function formatPhone(phone: string) {
+  if (phone.length === 11) {
+    return `${phone.slice(0, 3)}-${phone.slice(3, 7)}-${phone.slice(7)}`;
+  }
+  return phone;
+}
 
-const recentActivities = [
-  { message: "New user registered", time: "2 min ago" },
-  { message: "Order #ORD-001 completed", time: "15 min ago" },
-  { message: "Product stock updated", time: "1 hour ago" },
-  { message: "New review submitted", time: "2 hours ago" },
-  { message: "Payment received for #ORD-003", time: "3 hours ago" },
-]
+export default async function DashboardPage() {
+  const supabase = await createClient();
 
-export default function DashboardPage() {
+  const { data: consultations } = await supabase
+    .from("consultations")
+    .select("*")
+    .order("created_at", { ascending: false });
+
+  const all = consultations ?? [];
+  const today = all.filter(
+    (c) =>
+      new Date(c.created_at).toDateString() === new Date().toDateString()
+  );
+  const internetCount = all.filter((c) => c.interest_internet).length;
+  const rentalCount = all.filter((c) => c.interest_rental).length;
+  const recent = all.slice(0, 5);
+
   return (
     <AdminLayout>
       <div className="space-y-6">
-        {/* Page Header */}
         <div>
-          <h1 className="text-2xl font-semibold tracking-tight">Dashboard</h1>
+          <h1 className="text-2xl font-semibold tracking-tight">대시보드</h1>
           <p className="text-muted-foreground text-sm">
-            Welcome back! Here&apos;s an overview of your business.
+            상담 신청 현황을 한눈에 확인하세요.
           </p>
         </div>
 
-        {/* Stats Cards */}
+        {/* 통계 카드 */}
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {stats.map((stat) => (
-            <Card key={stat.title}>
-              <CardHeader className="pb-2">
-                <div className="flex items-center justify-between">
-                  <CardDescription>{stat.title}</CardDescription>
-                  <stat.icon className="size-4 text-muted-foreground" />
-                </div>
-                <CardTitle className="text-2xl">{stat.value}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-1 text-xs">
-                  {stat.trend === "up" ? (
-                    <ArrowUpRight className="size-3 text-emerald-500" />
-                  ) : (
-                    <ArrowDownRight className="size-3 text-red-500" />
-                  )}
-                  <span
-                    className={
-                      stat.trend === "up"
-                        ? "text-emerald-500"
-                        : "text-red-500"
-                    }
-                  >
-                    {stat.change}
-                  </span>
-                  <span className="text-muted-foreground">from last month</span>
-                </div>
-              </CardContent>
-            </Card>
-          ))}
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription>전체 신청</CardDescription>
+                <MessageSquare className="size-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-2xl">{all.length}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription>오늘 신청</CardDescription>
+                <Clock className="size-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-2xl">{today.length}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription>인터넷TV</CardDescription>
+                <Wifi className="size-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-2xl">{internetCount}</CardTitle>
+            </CardHeader>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <div className="flex items-center justify-between">
+                <CardDescription>가전렌탈</CardDescription>
+                <Refrigerator className="size-4 text-muted-foreground" />
+              </div>
+              <CardTitle className="text-2xl">{rentalCount}</CardTitle>
+            </CardHeader>
+          </Card>
         </div>
 
-        {/* Content Grid */}
-        <div className="grid gap-4 lg:grid-cols-7">
-          {/* Recent Orders */}
-          <Card className="lg:col-span-4">
-            <CardHeader>
-              <CardTitle>Recent Orders</CardTitle>
-              <CardDescription>Latest orders from your store</CardDescription>
-            </CardHeader>
-            <CardContent>
+        {/* 최근 신청 */}
+        <Card>
+          <CardHeader>
+            <CardTitle>최근 상담 신청</CardTitle>
+            <CardDescription>최근 접수된 상담 신청 5건</CardDescription>
+          </CardHeader>
+          <CardContent>
+            {recent.length === 0 ? (
+              <p className="py-8 text-center text-sm text-muted-foreground">
+                아직 상담 신청이 없습니다.
+              </p>
+            ) : (
               <div className="space-y-4">
-                {recentOrders.map((order) => (
+                {recent.map((c) => (
                   <div
-                    key={order.id}
+                    key={c.id}
                     className="flex items-center justify-between"
                   >
                     <div className="space-y-1">
-                      <p className="text-sm font-medium">{order.customer}</p>
+                      <p className="text-sm font-medium">{c.name}</p>
                       <p className="text-xs text-muted-foreground">
-                        {order.id}
+                        {formatPhone(c.phone)}
                       </p>
                     </div>
-                    <div className="flex items-center gap-3">
-                      <span className="text-sm font-medium">
-                        {order.amount}
+                    <div className="flex items-center gap-2">
+                      {c.interest_internet && (
+                        <Badge variant="secondary">인터넷TV</Badge>
+                      )}
+                      {c.interest_rental && (
+                        <Badge variant="secondary">가전렌탈</Badge>
+                      )}
+                      <span className="text-xs text-muted-foreground">
+                        {formatDate(c.created_at)}
                       </span>
-                      <Badge
-                        variant={
-                          order.status === "Completed"
-                            ? "default"
-                            : order.status === "Processing"
-                              ? "secondary"
-                              : "outline"
-                        }
-                      >
-                        {order.status}
-                      </Badge>
                     </div>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-
-          {/* Recent Activity */}
-          <Card className="lg:col-span-3">
-            <CardHeader>
-              <CardTitle>Recent Activity</CardTitle>
-              <CardDescription>Latest activities in your system</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="space-y-4">
-                {recentActivities.map((activity, i) => (
-                  <div key={i} className="flex items-start gap-3">
-                    <div className="mt-1 size-2 rounded-full bg-primary shrink-0" />
-                    <div className="space-y-1">
-                      <p className="text-sm">{activity.message}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {activity.time}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
+            )}
+          </CardContent>
+        </Card>
       </div>
     </AdminLayout>
-  )
+  );
 }

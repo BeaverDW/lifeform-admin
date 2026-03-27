@@ -50,7 +50,7 @@ export default async function DashboardPage() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">대시보드</h1>
           <p className="text-muted-foreground text-sm">
-            상담 신청 현황을 한눈에 확인하세요.
+            상담 신청 현황을 한눈에 확인하세요. (테스트 업데이트)
           </p>
         </div>
 

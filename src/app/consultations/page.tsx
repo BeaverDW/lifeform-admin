@@ -116,6 +116,7 @@ export default async function ConsultationsPage() {
                       <TableHead>이름</TableHead>
                       <TableHead>연락처</TableHead>
                       <TableHead>관심 항목</TableHead>
+                      <TableHead>희망 시간</TableHead>
                       <TableHead>유입 경로</TableHead>
                       <TableHead>지역</TableHead>
                       <TableHead>페이지</TableHead>
@@ -132,12 +133,21 @@ export default async function ConsultationsPage() {
                         <TableCell>
                           <div className="flex gap-1">
                             {c.interest_internet && (
-                              <Badge variant="secondary">인터넷TV</Badge>
+                              <Badge variant="secondary">인터넷</Badge>
+                            )}
+                            {c.interest_tv && (
+                              <Badge variant="secondary">TV</Badge>
                             )}
                             {c.interest_rental && (
                               <Badge variant="secondary">가전렌탈</Badge>
                             )}
+                            {c.interest_purifier && (
+                              <Badge variant="secondary">정수기</Badge>
+                            )}
                           </div>
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.preferred_time ?? "-"}
                         </TableCell>
                         <TableCell>
                           {c.utm_source ? (

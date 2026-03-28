@@ -17,6 +17,7 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { MessageSquare, Wifi, Refrigerator } from "lucide-react";
+import { UserAgentCell } from "./user-agent-cell";
 
 function formatDate(dateStr: string) {
   const date = new Date(dateStr);
@@ -116,6 +117,10 @@ export default async function ConsultationsPage() {
                       <TableHead>연락처</TableHead>
                       <TableHead>관심 항목</TableHead>
                       <TableHead>유입 경로</TableHead>
+                      <TableHead>지역</TableHead>
+                      <TableHead>페이지</TableHead>
+                      <TableHead>IP</TableHead>
+                      <TableHead>UA</TableHead>
                       <TableHead>신청일</TableHead>
                     </TableRow>
                   </TableHeader>
@@ -145,6 +150,18 @@ export default async function ConsultationsPage() {
                               직접 유입
                             </span>
                           )}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.region ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground max-w-[200px] truncate">
+                          {c.page_url ?? "-"}
+                        </TableCell>
+                        <TableCell className="text-xs text-muted-foreground">
+                          {c.ip ?? "-"}
+                        </TableCell>
+                        <TableCell>
+                          <UserAgentCell value={c.user_agent} />
                         </TableCell>
                         <TableCell className="text-muted-foreground text-sm">
                           {formatDate(c.created_at)}

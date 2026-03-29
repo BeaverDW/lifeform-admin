@@ -126,3 +126,7 @@
     font-family: Arial, Helvetica, sans-serif;
   }
 }
+
+.ag-header-cell-center .ag-header-cell-label {
+  justify-content: center;
+}

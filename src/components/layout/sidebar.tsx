@@ -6,13 +6,13 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   MessageSquare,
+  FileText,
   Settings,
   ChevronLeft,
   ChevronRight,
 } from "lucide-react"
 
 import { cn } from "@/lib/utils"
-import { Button } from "@/components/ui/button"
 import {
   Tooltip,
   TooltipContent,
@@ -24,6 +24,7 @@ import { Separator } from "@/components/ui/separator"
 const navItems = [
   { title: "대시보드", href: "/", icon: LayoutDashboard },
   { title: "상담 신청", href: "/consultations", icon: MessageSquare },
+  { title: "계약서", href: "/contracts", icon: FileText },
 ]
 
 const bottomNavItems = [
@@ -38,10 +39,21 @@ export function Sidebar() {
     <TooltipProvider>
       <aside
         className={cn(
-          "flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
+          "relative flex h-full flex-col border-r bg-sidebar text-sidebar-foreground transition-all duration-300",
           collapsed ? "w-16" : "w-64"
         )}
       >
+        {/* Collapse Toggle */}
+        <button
+          onClick={() => setCollapsed(!collapsed)}
+          className="absolute -right-3 top-1/2 z-10 flex size-6 -translate-y-1/2 items-center justify-center rounded-full border bg-background text-muted-foreground shadow-sm hover:text-foreground transition-colors"
+        >
+          {collapsed ? (
+            <ChevronRight className="size-3" />
+          ) : (
+            <ChevronLeft className="size-3" />
+          )}
+        </button>
         {/* Logo */}
         <div className="flex h-14 items-center border-b px-4">
           {!collapsed && (
@@ -127,24 +139,6 @@ export function Sidebar() {
           })}
         </div>
 
-        {/* Collapse Toggle */}
-        <div className="border-t p-2">
-          <Button
-            variant="ghost"
-            size="sm"
-            className={cn("w-full", collapsed && "px-2")}
-            onClick={() => setCollapsed(!collapsed)}
-          >
-            {collapsed ? (
-              <ChevronRight className="size-4" />
-            ) : (
-              <>
-                <ChevronLeft className="size-4" />
-                <span>Collapse</span>
-              </>
-            )}
-          </Button>
-        </div>
       </aside>
     </TooltipProvider>
   )

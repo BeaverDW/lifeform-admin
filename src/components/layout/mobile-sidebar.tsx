@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   MessageSquare,
+  FileText,
   Settings,
 } from "lucide-react"
 
@@ -14,6 +15,7 @@ import { Separator } from "@/components/ui/separator"
 const navItems = [
   { title: "대시보드", href: "/", icon: LayoutDashboard },
   { title: "상담 신청", href: "/consultations", icon: MessageSquare },
+  { title: "계약서", href: "/contracts", icon: FileText },
 ]
 
 const bottomNavItems = [

@@ -221,7 +221,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     }
 
     if (deletedIds.current.size > 0) {
-      await supabase.from("contracts").delete().in("id", Array.from(deletedIds.current));
+      await supabase.from("contracts").update({ is_deleted: true }).in("id", Array.from(deletedIds.current));
     }
     if (inserts.length > 0) {
       await supabase.from("contracts").insert(inserts);

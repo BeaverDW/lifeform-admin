@@ -11,7 +11,7 @@ import {
   type CellValueChangedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, Save } from "lucide-react";
+import { Plus, Save, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -89,14 +89,20 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
   const [dirty, setDirty] = useState(false);
   const modifiedIds = useRef<Set<string>>(new Set());
   const newRowIds = useRef<Set<string>>(new Set());
+  const deletedIds = useRef<Set<string>>(new Set());
 
-  const [filters, setFilters] = useState<Filters>({
-    rentalCompany: "",
-    installDateFrom: "",
-    installDateTo: "",
-    customerName: "",
-    installProduct: "",
-    bankName: "",
+  const [filters, setFilters] = useState<Filters>(() => {
+    const today = new Date();
+    const twoMonthsAgo = new Date(today);
+    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    return {
+      rentalCompany: "",
+      installDateFrom: twoMonthsAgo.toISOString().slice(0, 10),
+      installDateTo: today.toISOString().slice(0, 10),
+      customerName: "",
+      installProduct: "",
+      bankName: "",
+    };
   });
 
   const updateFilter = useCallback(
@@ -106,6 +112,26 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     },
     []
   );
+
+  const removeRows = useCallback(() => {
+    const api = gridRef.current;
+    if (!api) return;
+    const selected = api.getSelectedRows();
+    if (selected.length === 0) {
+      toast.error("삭제할 행을 선택해주세요.");
+      return;
+    }
+    for (const row of selected) {
+      if (row._tempId) {
+        newRowIds.current.delete(row._tempId);
+      } else if (row.id) {
+        deletedIds.current.add(row.id);
+        modifiedIds.current.delete(row.id);
+      }
+    }
+    api.applyTransaction({ remove: selected });
+    setDirty(true);
+  }, []);
 
   const addRow = useCallback(() => {
     const tempId = `_new_${Date.now()}`;
@@ -175,6 +201,9 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       return;
     }
 
+    if (deletedIds.current.size > 0) {
+      await supabase.from("contracts").delete().in("id", Array.from(deletedIds.current));
+    }
     if (inserts.length > 0) {
       await supabase.from("contracts").insert(inserts);
     }
@@ -183,6 +212,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       await supabase.from("contracts").update(rest).eq("id", id);
     }
 
+    deletedIds.current.clear();
     modifiedIds.current.clear();
     newRowIds.current.clear();
     setDirty(false);
@@ -239,6 +269,17 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
   const columnDefs = useMemo<ColDef[]>(
     () => [
       {
+        headerCheckboxSelection: true,
+        checkboxSelection: true,
+        width: 50,
+        pinned: "left",
+        sortable: false,
+        filter: false,
+        resizable: false,
+        editable: false,
+        cellStyle: (p) => (p.node?.rowPinned ? { visibility: "hidden" } : null),
+      },
+      {
         field: "rental_company",
         headerName: "렌탈사",
         width: 120,
@@ -247,13 +288,14 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: [10, 20, 30] },
         valueFormatter: (p) => {
-          if (p.node.rowPinned) return "";
+          if (p.node?.rowPinned) return "";
           return RENTAL_COMPANY_MAP[p.value] ?? "선택";
         },
-        cellStyle: (p) => {
-          if (p.node.rowPinned) return { borderRight: "none" };
-          return !p.value ? { color: "#9ca3af" } : null;
-        },
+        cellStyle: (p) => (
+          !p.value && !p.node?.rowPinned
+            ? { color: "#9ca3af", borderRight: "none" }
+            : { color: "inherit", borderRight: "none" }
+        ),
       },
       {
         field: "customer_name",
@@ -274,9 +316,15 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         headerName: "생년월일",
         width: 130,
         editable: true,
-        cellStyle: { textAlign: "center" },
+        cellStyle: (p) => ({
+          textAlign: "center",
+          color: (!p.value && !p.node?.rowPinned) ? "#9ca3af" : "inherit",
+        }),
         cellEditor: "agDateStringCellEditor",
-        valueFormatter: (p) => formatDate(p.value),
+        valueFormatter: (p) => {
+          if (p.node?.rowPinned) return "";
+          return p.value ? formatDate(p.value) : "날짜선택";
+        },
       },
       {
         field: "install_address",
@@ -293,12 +341,12 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: BANK_OPTIONS },
         valueFormatter: (p) => {
-          if (p.node.rowPinned) return "";
+          if (p.node?.rowPinned) return "";
           return p.value || "선택";
         },
         cellStyle: (p) => {
-          if (p.node.rowPinned) return null;
-          return !p.value ? { color: "#9ca3af", textAlign: "center" } : { textAlign: "center" };
+          if (p.node?.rowPinned) return null;
+          return !p.value ? { color: "#9ca3af", textAlign: "center" } : { color: "inherit", textAlign: "center" };
         },
       },
       {
@@ -316,13 +364,13 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: [10, 20, 30, 40, 50] },
         valueFormatter: (p) => {
-          if (p.node.rowPinned) return "합계";
+          if (p.node?.rowPinned) return "합계";
           return PRODUCT_MAP[p.value] ?? "선택";
         },
-        cellStyle: (p) => {
-          if (p.node.rowPinned) return { textAlign: "center" };
-          return !p.value ? { color: "#9ca3af" } : null;
-        },
+        cellStyle: (p) => ({
+          color: (!p.value && !p.node?.rowPinned) ? "#9ca3af" : "inherit",
+          textAlign: p.node?.rowPinned ? "center" : "left",
+        }),
       },
       {
         field: "product_number",
@@ -366,9 +414,15 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         width: 130,
         sort: "desc",
         editable: true,
-        cellStyle: { textAlign: "center" },
+        cellStyle: (p) => ({
+          textAlign: "center",
+          color: (!p.value && !p.node?.rowPinned) ? "#9ca3af" : "inherit",
+        }),
         cellEditor: "agDateStringCellEditor",
-        valueFormatter: (p) => formatDate(p.value),
+        valueFormatter: (p) => {
+          if (p.node?.rowPinned) return "";
+          return p.value ? formatDate(p.value) : "날짜선택";
+        },
       },
     ],
     []
@@ -409,6 +463,9 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
           <div className="flex items-center gap-1">
             <Button size="icon-sm" variant="outline" onClick={addRow}>
               <Plus className="size-4" />
+            </Button>
+            <Button size="icon-sm" variant="outline" onClick={removeRows}>
+              <Trash2 className="size-4" />
             </Button>
             <Button
               size="icon-sm"
@@ -531,6 +588,8 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
               }
               return undefined;
             }}
+            singleClickEdit={true}
+            rowSelection="multiple"
             pagination={true}
             paginationPageSize={20}
             paginationPageSizeSelector={[20, 50, 100]}

@@ -81,6 +81,7 @@ interface Filters {
   customerName: string;
   installProduct: string;
   bankName: string;
+  isDeleted: string;
 }
 
 export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
@@ -99,6 +100,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     customerName: "",
     installProduct: "",
     bankName: "",
+    isDeleted: "N",
   });
 
   useEffect(() => {
@@ -247,7 +249,8 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       filters.installDateTo ||
       filters.customerName ||
       filters.installProduct ||
-      filters.bankName
+      filters.bankName ||
+      filters.isDeleted
     );
   }, [filters]);
 
@@ -279,6 +282,11 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       }
       if (filters.bankName) {
         if (d.bank_name !== filters.bankName) return false;
+      }
+      if (filters.isDeleted === "N") {
+        if (d.is_deleted === true) return false;
+      } else if (filters.isDeleted === "Y") {
+        if (d.is_deleted !== true) return false;
       }
 
       return true;
@@ -569,6 +577,23 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
                     {label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div className="space-y-1">
+            <Label className="text-xs text-muted-foreground">삭제여부</Label>
+            <Select
+              value={filters.isDeleted}
+              onValueChange={(v) => updateFilter("isDeleted", v)}
+            >
+              <SelectTrigger className="w-[120px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">전체</SelectItem>
+                <SelectItem value="N">N</SelectItem>
+                <SelectItem value="Y">Y</SelectItem>
               </SelectContent>
             </Select>
           </div>

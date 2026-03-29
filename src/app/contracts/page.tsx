@@ -7,7 +7,6 @@ export default async function ContractsPage() {
   const { data: contracts, error } = await supabase
     .from("contracts")
     .select("*")
-    .eq("is_deleted", false)
     .order("created_at", { ascending: false });
 
   return (

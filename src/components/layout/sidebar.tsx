@@ -33,10 +33,12 @@ const bottomNavItems = [
 
 export function Sidebar() {
   const pathname = usePathname()
-  const [collapsed, setCollapsed] = React.useState(() => {
-    if (typeof window === "undefined") return false
-    return localStorage.getItem("sidebar-collapsed") === "true"
-  })
+  const [collapsed, setCollapsed] = React.useState(false)
+
+  React.useEffect(() => {
+    const saved = localStorage.getItem("sidebar-collapsed")
+    if (saved === "true") setCollapsed(true)
+  }, [])
 
   const toggleCollapsed = React.useCallback(() => {
     setCollapsed((prev) => {

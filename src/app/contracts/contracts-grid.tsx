@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { AgGridReact } from "ag-grid-react";
 import {
@@ -9,6 +9,7 @@ import {
   type GridApi,
   type IRowNode,
   type CellValueChangedEvent,
+  type CellEditingStoppedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
 import { Plus, Save, Trash2 } from "lucide-react";
@@ -91,19 +92,26 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
   const newRowIds = useRef<Set<string>>(new Set());
   const deletedIds = useRef<Set<string>>(new Set());
 
-  const [filters, setFilters] = useState<Filters>(() => {
+  const [filters, setFilters] = useState<Filters>({
+    rentalCompany: "",
+    installDateFrom: "",
+    installDateTo: "",
+    customerName: "",
+    installProduct: "",
+    bankName: "",
+  });
+
+  useEffect(() => {
     const today = new Date();
     const twoMonthsAgo = new Date(today);
     twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
-    return {
-      rentalCompany: "",
+    setFilters((prev) => ({
+      ...prev,
       installDateFrom: twoMonthsAgo.toISOString().slice(0, 10),
       installDateTo: today.toISOString().slice(0, 10),
-      customerName: "",
-      installProduct: "",
-      bankName: "",
-    };
-  });
+    }));
+    setTimeout(() => gridRef.current?.onFilterChanged(), 0);
+  }, []);
 
   const updateFilter = useCallback(
     (key: keyof Filters, value: string) => {
@@ -116,6 +124,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
   const removeRows = useCallback(() => {
     const api = gridRef.current;
     if (!api) return;
+    api.stopEditing();
     const selected = api.getSelectedRows();
     if (selected.length === 0) {
       toast.error("삭제할 행을 선택해주세요.");
@@ -141,19 +150,29 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     setDirty(true);
   }, []);
 
-  const onCellValueChanged = useCallback((e: CellValueChangedEvent) => {
-    const row = e.data;
+  const trackChange = useCallback((row: Record<string, unknown>) => {
     if (row._tempId) {
-      newRowIds.current.add(row._tempId);
+      newRowIds.current.add(row._tempId as string);
     } else if (row.id) {
-      modifiedIds.current.add(row.id);
+      modifiedIds.current.add(row.id as string);
     }
-    setDirty(true);
+    setTimeout(() => setDirty(true), 0);
   }, []);
+
+  const onCellValueChanged = useCallback((e: CellValueChangedEvent) => {
+    trackChange(e.data);
+  }, [trackChange]);
+
+  const onCellEditingStopped = useCallback((e: CellEditingStoppedEvent) => {
+    if (e.oldValue !== e.newValue && e.data) {
+      trackChange(e.data);
+    }
+  }, [trackChange]);
 
   const handleSave = useCallback(async () => {
     const api = gridRef.current;
     if (!api) return;
+    api.stopEditing();
     setSaving(true);
 
     const supabase = createClient();
@@ -217,6 +236,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     newRowIds.current.clear();
     setDirty(false);
     setSaving(false);
+    api.deselectAll();
     router.refresh();
   }, [router]);
 
@@ -597,6 +617,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
             isExternalFilterPresent={isExternalFilterPresent}
             doesExternalFilterPass={doesExternalFilterPass}
             onCellValueChanged={onCellValueChanged}
+            onCellEditingStopped={onCellEditingStopped}
           />
         </div>
       </CardContent>

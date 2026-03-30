@@ -161,9 +161,32 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     setTimeout(() => setDirty(true), 0);
   }, []);
 
+  const [pinnedBottomRowData, setPinnedBottomRowData] = useState<Record<string, unknown>[]>([
+    { _isTotal: true, commission: 0, gift_amount: 0 },
+  ]);
+  const [filteredCount, setFilteredCount] = useState(data.length);
+
+  const recalcTotals = useCallback(() => {
+    const api = gridRef.current;
+    if (!api) return;
+    let totalCommission = 0;
+    let totalGift = 0;
+    let count = 0;
+    api.forEachNodeAfterFilter((node) => {
+      if (node.data && !node.data._isTotal) {
+        totalCommission += Number(node.data.commission ?? 0);
+        totalGift += Number(node.data.gift_amount ?? 0);
+        count++;
+      }
+    });
+    setPinnedBottomRowData([{ _isTotal: true, commission: totalCommission, gift_amount: totalGift }]);
+    setFilteredCount(count);
+  }, []);
+
   const onCellValueChanged = useCallback((e: CellValueChangedEvent) => {
     trackChange(e.data);
-  }, [trackChange]);
+    recalcTotals();
+  }, [trackChange, recalcTotals]);
 
   const onCellEditingStopped = useCallback((e: CellEditingStoppedEvent) => {
     if (e.oldValue !== e.newValue && e.data) {
@@ -456,18 +479,6 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     []
   );
 
-  const pinnedBottomRowData = useMemo(() => {
-    const totalCommission = data.reduce((sum, r) => sum + Number(r.commission ?? 0), 0);
-    const totalGift = data.reduce((sum, r) => sum + Number(r.gift_amount ?? 0), 0);
-    return [
-      {
-        _isTotal: true,
-        commission: totalCommission,
-        gift_amount: totalGift,
-      },
-    ];
-  }, [data]);
-
   const defaultColDef = useMemo<ColDef>(
     () => ({
       sortable: true,
@@ -485,7 +496,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       <CardHeader>
         <CardTitle>계약 목록</CardTitle>
         <CardDescription>
-          총 {data.length}건의 계약
+          총 {filteredCount}건의 계약
         </CardDescription>
         <CardAction>
           <div className="flex items-center gap-1">
@@ -638,7 +649,8 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
             pagination={true}
             paginationPageSize={20}
             paginationPageSizeSelector={[20, 50, 100]}
-            onGridReady={(e) => (gridRef.current = e.api)}
+            onGridReady={(e) => { gridRef.current = e.api; recalcTotals(); }}
+            onFilterChanged={recalcTotals}
             isExternalFilterPresent={isExternalFilterPresent}
             doesExternalFilterPass={doesExternalFilterPass}
             onCellValueChanged={onCellValueChanged}

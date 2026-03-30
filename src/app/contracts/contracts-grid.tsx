@@ -12,7 +12,8 @@ import {
   type CellEditingStoppedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
-import { Plus, Save, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Plus, Save, Trash2 } from "lucide-react";
+import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -181,6 +182,36 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     });
     setPinnedBottomRowData([{ _isTotal: true, commission: totalCommission, gift_amount: totalGift }]);
     setFilteredCount(count);
+  }, []);
+
+  const exportExcel = useCallback(() => {
+    const api = gridRef.current;
+    if (!api) return;
+    const rows: Record<string, unknown>[] = [];
+    api.forEachNodeAfterFilter((node) => {
+      if (node.data && !node.data._isTotal && !node.data._tempId) {
+        const d = node.data;
+        rows.push({
+          "렌탈사": RENTAL_COMPANY_MAP[d.rental_company] ?? "",
+          "고객이름": d.customer_name ?? "",
+          "전화번호": d.phone ? formatPhone(String(d.phone)) : "",
+          "생년월일": d.birth_date ? formatDate(d.birth_date) : "",
+          "설치주소": d.install_address ?? "",
+          "은행명": d.bank_name ?? "",
+          "계좌번호": d.account_number ?? "",
+          "설치상품": PRODUCT_MAP[d.install_product] ?? "",
+          "제품번호": d.product_number ?? "",
+          "수당": Number(d.commission ?? 0),
+          "사은품": Number(d.gift_amount ?? 0),
+          "순익": Number(d.commission ?? 0) - Number(d.gift_amount ?? 0),
+          "설치일": d.install_date ? formatDate(d.install_date) : "",
+        });
+      }
+    });
+    const ws = XLSX.utils.json_to_sheet(rows);
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, "계약목록");
+    XLSX.writeFile(wb, `계약목록_${new Date().toISOString().slice(0, 10)}.xlsx`);
   }, []);
 
   const onCellValueChanged = useCallback((e: CellValueChangedEvent) => {
@@ -500,6 +531,9 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
         </CardDescription>
         <CardAction>
           <div className="flex items-center gap-1">
+            <Button size="icon-sm" variant="outline" onClick={exportExcel}>
+              <FileSpreadsheet className="size-4" />
+            </Button>
             <Button size="icon-sm" variant="outline" onClick={addRow}>
               <Plus className="size-4" />
             </Button>

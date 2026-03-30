@@ -12,7 +12,7 @@ import {
   type CellEditingStoppedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
-import { FileSpreadsheet, Plus, Save, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Plus, Printer, Save, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -26,6 +26,12 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from "@/components/ui/tooltip";
 import {
   Select,
   SelectContent,
@@ -212,6 +218,62 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     const wb = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(wb, ws, "계약목록");
     XLSX.writeFile(wb, `계약목록_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  }, []);
+
+  const printTable = useCallback(() => {
+    const api = gridRef.current;
+    if (!api) return;
+    const rows: Record<string, unknown>[] = [];
+    let totalCommission = 0;
+    let totalGift = 0;
+    api.forEachNodeAfterFilter((node) => {
+      if (node.data && !node.data._isTotal && !node.data._tempId) {
+        const d = node.data;
+        totalCommission += Number(d.commission ?? 0);
+        totalGift += Number(d.gift_amount ?? 0);
+        rows.push(d);
+      }
+    });
+    const html = `<!DOCTYPE html><html><head><meta charset="utf-8"><title>계약목록</title>
+<style>
+  body { font-family: 'Malgun Gothic', sans-serif; font-size: 11px; margin: 20px; }
+  h2 { text-align: center; margin-bottom: 10px; }
+  table { width: 100%; border-collapse: collapse; }
+  th, td { border: 1px solid #333; padding: 4px 6px; }
+  th { background: #f0f0f0; }
+  td.right { text-align: right; }
+  tr.total { font-weight: bold; background: #fef2f2; }
+  @media print { body { margin: 0; } }
+</style></head><body>
+<h2>계약 목록 (${rows.length}건)</h2>
+<table><thead><tr>
+  <th>렌탈사</th><th>고객이름</th><th>전화번호</th><th>설치주소</th>
+  <th>설치상품</th><th>제품번호</th><th>수당</th><th>사은품</th><th>순익</th><th>설치일</th>
+</tr></thead><tbody>
+${rows.map((d) => `<tr>
+  <td>${RENTAL_COMPANY_MAP[d.rental_company as number] ?? ""}</td>
+  <td>${d.customer_name ?? ""}</td>
+  <td>${d.phone ? formatPhone(String(d.phone)) : ""}</td>
+  <td>${d.install_address ?? ""}</td>
+  <td>${PRODUCT_MAP[d.install_product as number] ?? ""}</td>
+  <td>${d.product_number ?? ""}</td>
+  <td class="right">${Number(d.commission ?? 0).toLocaleString("ko-KR")}원</td>
+  <td class="right">${Number(d.gift_amount ?? 0).toLocaleString("ko-KR")}원</td>
+  <td class="right">${(Number(d.commission ?? 0) - Number(d.gift_amount ?? 0)).toLocaleString("ko-KR")}원</td>
+  <td>${d.install_date ? formatDate(String(d.install_date)) : ""}</td>
+</tr>`).join("")}
+<tr class="total">
+  <td colspan="6" style="text-align:center">합계</td>
+  <td class="right">${totalCommission.toLocaleString("ko-KR")}원</td>
+  <td class="right">${totalGift.toLocaleString("ko-KR")}원</td>
+  <td class="right">${(totalCommission - totalGift).toLocaleString("ko-KR")}원</td>
+  <td></td>
+</tr></tbody></table></body></html>`;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(html);
+    w.document.close();
+    w.print();
   }, []);
 
   const onCellValueChanged = useCallback((e: CellValueChangedEvent) => {
@@ -530,25 +592,55 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
           총 {filteredCount}건의 계약
         </CardDescription>
         <CardAction>
-          <div className="flex items-center gap-1">
-            <Button size="icon-sm" variant="outline" onClick={exportExcel}>
-              <FileSpreadsheet className="size-4" />
-            </Button>
-            <Button size="icon-sm" variant="outline" onClick={addRow}>
-              <Plus className="size-4" />
-            </Button>
-            <Button size="icon-sm" variant="outline" onClick={removeRows}>
-              <Trash2 className="size-4" />
-            </Button>
-            <Button
-              size="icon-sm"
-              variant={dirty ? "default" : "outline"}
-              onClick={handleSave}
-              disabled={!dirty || saving}
-            >
-              <Save className="size-4" />
-            </Button>
-          </div>
+          <TooltipProvider>
+            <div className="flex items-center gap-1">
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon-sm" variant="outline" onClick={addRow}>
+                    <Plus className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>행 추가</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon-sm" variant="outline" onClick={removeRows}>
+                    <Trash2 className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>선택 삭제</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    size="icon-sm"
+                    variant={dirty ? "default" : "outline"}
+                    onClick={handleSave}
+                    disabled={!dirty || saving}
+                  >
+                    <Save className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>저장</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon-sm" variant="outline" onClick={exportExcel}>
+                    <FileSpreadsheet className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>엑셀 다운로드</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button size="icon-sm" variant="outline" onClick={printTable}>
+                    <Printer className="size-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>인쇄</TooltipContent>
+              </Tooltip>
+            </div>
+          </TooltipProvider>
         </CardAction>
       </CardHeader>
       <CardContent className="space-y-4">

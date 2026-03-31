@@ -44,6 +44,7 @@ const RENTAL_COMPANY_MAP: Record<number, string> = {
   10: "위드렌탈",
   20: "렌탈세계",
   30: "에이케이넷",
+  90: "기타",
 };
 
 const PRODUCT_MAP: Record<number, string> = {
@@ -57,7 +58,7 @@ const PRODUCT_MAP: Record<number, string> = {
 const BANK_OPTIONS = [
   "국민", "신한", "우리", "하나", "농협",
   "기업", "카카오뱅크", "토스뱅크", "SC제일", "대구",
-  "부산", "경남", "광주", "전북", "제주",
+  "부산", "경남", "광주", "전북", "제주", "신협", "새마을금고",
 ];
 
 function formatPhone(phone: string) {
@@ -112,12 +113,11 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
 
   useEffect(() => {
     const today = new Date();
-    const twoMonthsAgo = new Date(today);
-    twoMonthsAgo.setMonth(twoMonthsAgo.getMonth() - 2);
+    const firstDayOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
     setFilters((prev) => ({
       ...prev,
-      installDateFrom: twoMonthsAgo.toISOString().slice(0, 10),
-      installDateTo: today.toISOString().slice(0, 10),
+      installDateFrom: `${firstDayOfMonth.getFullYear()}-${String(firstDayOfMonth.getMonth() + 1).padStart(2, "0")}-01`,
+      installDateTo: `${today.getFullYear()}-${String(today.getMonth() + 1).padStart(2, "0")}-${String(today.getDate()).padStart(2, "0")}`,
     }));
     setTimeout(() => gridRef.current?.onFilterChanged(), 0);
   }, []);
@@ -430,7 +430,7 @@ ${rows.map((d) => `<tr>
         pinned: "left",
         editable: true,
         cellEditor: "agSelectCellEditor",
-        cellEditorParams: { values: [10, 20, 30] },
+        cellEditorParams: { values: [10, 20, 30, 90] },
         valueFormatter: (p) => {
           if (p.node?.rowPinned) return "";
           return RENTAL_COMPANY_MAP[p.value] ?? "선택";

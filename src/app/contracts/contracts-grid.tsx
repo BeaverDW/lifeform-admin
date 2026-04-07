@@ -58,7 +58,7 @@ const PRODUCT_MAP: Record<number, string> = {
 const BANK_OPTIONS = [
   "국민", "신한", "우리", "하나", "농협",
   "기업", "카카오뱅크", "토스뱅크", "SC제일", "대구",
-  "부산", "경남", "광주", "전북", "제주", "신협", "새마을금고",
+  "부산", "경남", "광주", "전북", "제주", "신협", "새마을금고", "수협",
 ];
 
 function formatPhone(phone: string) {

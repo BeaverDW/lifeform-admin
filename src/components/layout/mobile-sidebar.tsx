@@ -1,11 +1,13 @@
 "use client"
 
 import Link from "next/link"
+import Image from "next/image"
 import { usePathname } from "next/navigation"
 import {
   LayoutDashboard,
   MessageSquare,
   FileText,
+  Users,
   Settings,
 } from "lucide-react"
 
@@ -16,6 +18,7 @@ const navItems = [
   { title: "대시보드", href: "/", icon: LayoutDashboard },
   { title: "상담 신청", href: "/consultations", icon: MessageSquare },
   { title: "계약서", href: "/contracts", icon: FileText },
+  { title: "고객관리", href: "/customers", icon: Users },
 ]
 
 const bottomNavItems = [
@@ -30,8 +33,8 @@ export function MobileSidebar() {
       {/* Logo */}
       <div className="flex h-14 items-center border-b px-4">
         <Link href="/" className="flex items-center gap-2 font-semibold">
-          <LayoutDashboard className="size-5" />
-          <span>Lifeform Admin</span>
+          <Image src="/life-form.png" alt="생활폼 오피스" width={28} height={28} />
+          <span>생활폼 오피스</span>
         </Link>
       </div>
 

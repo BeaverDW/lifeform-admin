@@ -3,8 +3,11 @@ import { Toaster } from "@/components/ui/sonner";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Lifeform Admin",
-  description: "Lifeform backoffice admin dashboard",
+  title: "생활폼 오피스 - 업무 통합 관리",
+  description: "생활폼 오피스 - 업무 통합 관리",
+  icons: {
+    icon: "/lifeform.ico",
+  },
 };
 
 export default function RootLayout({

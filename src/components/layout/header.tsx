@@ -1,6 +1,7 @@
 "use client"
 
 import { Bell, Menu, Search, LogOut, User } from "lucide-react"
+import { logout } from "@/app/login/actions"
 
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
@@ -86,7 +87,7 @@ export function Header() {
               Settings
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem variant="destructive">
+            <DropdownMenuItem variant="destructive" onClick={() => logout()}>
               <LogOut />
               Log out
             </DropdownMenuItem>

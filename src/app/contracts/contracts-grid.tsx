@@ -12,7 +12,7 @@ import {
   type CellEditingStoppedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
-import { FileSpreadsheet, Plus, Printer, Save, Trash2 } from "lucide-react";
+import { FileSpreadsheet, Plus, Printer, Save, Search, Trash2 } from "lucide-react";
 import * as XLSX from "xlsx";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -39,6 +39,12 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 const RENTAL_COMPANY_MAP: Record<number, string> = {
   10: "위드렌탈",
@@ -151,12 +157,76 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     setDirty(true);
   }, []);
 
-  const addRow = useCallback(() => {
+  const PAGE_SIZE = 20;
+  const [customerModalOpen, setCustomerModalOpen] = useState(false);
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState<Record<string, unknown>[]>([]);
+  const [customerLoading, setCustomerLoading] = useState(false);
+  const [customerHasMore, setCustomerHasMore] = useState(false);
+  const [customerPage, setCustomerPage] = useState(0);
+
+  const openCustomerModal = useCallback(() => {
+    selectingRef.current = false;
+    setCustomerSearch("");
+    setCustomerResults([]);
+    setCustomerHasMore(false);
+    setCustomerPage(0);
+    setCustomerModalOpen(true);
+  }, []);
+
+  const fetchCustomers = useCallback(async (keyword: string, page: number) => {
+    if (!keyword.trim()) {
+      setCustomerResults([]);
+      setCustomerHasMore(false);
+      return;
+    }
+    setCustomerLoading(true);
+    const supabase = createClient();
+    const from = page * PAGE_SIZE;
+    const { data } = await supabase
+      .from("customers")
+      .select("id, name, phone")
+      .or(`name.ilike.%${keyword}%,phone.ilike.%${keyword}%`)
+      .order("name")
+      .range(from, from + PAGE_SIZE);
+    const results = data ?? [];
+    setCustomerHasMore(results.length > PAGE_SIZE);
+    const trimmed = results.slice(0, PAGE_SIZE);
+    if (page === 0) {
+      setCustomerResults(trimmed);
+    } else {
+      setCustomerResults((prev) => [...prev, ...trimmed]);
+    }
+    setCustomerLoading(false);
+  }, []);
+
+  const searchCustomers = useCallback((keyword: string) => {
+    setCustomerSearch(keyword);
+    setCustomerPage(0);
+    fetchCustomers(keyword, 0);
+  }, [fetchCustomers]);
+
+  const loadMore = useCallback(() => {
+    const next = customerPage + 1;
+    setCustomerPage(next);
+    fetchCustomers(customerSearch, next);
+  }, [customerPage, customerSearch, fetchCustomers]);
+
+  const selectingRef = useRef(false);
+  const selectCustomer = useCallback((customer: Record<string, unknown>) => {
+    if (selectingRef.current) return;
+    selectingRef.current = true;
     const tempId = `_new_${Date.now()}`;
-    const newRow = { _tempId: tempId };
+    const newRow = {
+      _tempId: tempId,
+      customer_id: customer.id,
+      customer_name: customer.name,
+      phone: customer.phone,
+    };
     newRowIds.current.add(tempId);
     gridRef.current?.applyTransaction({ add: [newRow], addIndex: 0 });
     setDirty(true);
+    setCustomerModalOpen(false);
   }, []);
 
   const trackChange = useCallback((row: Record<string, unknown>) => {
@@ -305,6 +375,7 @@ ${rows.map((d) => `<tr>
 
       const payload = {
         rental_company: row.rental_company ?? null,
+        customer_id: row.customer_id ?? null,
         customer_name: row.customer_name ?? null,
         phone: row.phone ?? null,
         birth_date: row.birth_date || null,
@@ -427,7 +498,6 @@ ${rows.map((d) => `<tr>
         field: "rental_company",
         headerName: "렌탈사",
         width: 120,
-        pinned: "left",
         editable: true,
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: [10, 20, 30, 90] },
@@ -445,13 +515,13 @@ ${rows.map((d) => `<tr>
         field: "customer_name",
         headerName: "고객이름",
         width: 100,
-        editable: true,
+        editable: false,
       },
       {
         field: "phone",
         headerName: "전화번호",
         width: 140,
-        editable: true,
+        editable: false,
         cellStyle: { textAlign: "center" },
         valueFormatter: (p) => (p.value ? formatPhone(p.value) : ""),
       },
@@ -596,11 +666,11 @@ ${rows.map((d) => `<tr>
             <div className="flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon-sm" variant="outline" onClick={addRow}>
+                  <Button size="icon-sm" variant="outline" onClick={openCustomerModal}>
                     <Plus className="size-4" />
                   </Button>
                 </TooltipTrigger>
-                <TooltipContent>행 추가</TooltipContent>
+                <TooltipContent>신규등록</TooltipContent>
               </Tooltip>
               <Tooltip>
                 <TooltipTrigger asChild>
@@ -785,6 +855,63 @@ ${rows.map((d) => `<tr>
         </div>
       </CardContent>
 
+      {/* 고객 검색 모달 */}
+      <Dialog open={customerModalOpen} onOpenChange={setCustomerModalOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>고객 검색</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                className="pl-9"
+                placeholder="이름 또는 전화번호로 검색"
+                value={customerSearch}
+                onChange={(e) => searchCustomers(e.target.value)}
+                autoFocus
+              />
+            </div>
+            <div
+              className="max-h-[300px] overflow-y-auto"
+              onScroll={(e) => {
+                const el = e.currentTarget;
+                if (
+                  customerHasMore &&
+                  !customerLoading &&
+                  el.scrollTop + el.clientHeight >= el.scrollHeight - 10
+                ) {
+                  loadMore();
+                }
+              }}
+            >
+              {customerResults.length === 0 && !customerLoading ? (
+                <p className="py-4 text-center text-sm text-muted-foreground">
+                  {customerSearch ? "검색 결과가 없습니다." : "이름 또는 전화번호를 입력하세요."}
+                </p>
+              ) : (
+                <div className="divide-y">
+                  {customerResults.map((c) => (
+                    <button
+                      key={c.id as string}
+                      className="flex w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/50 rounded-md"
+                      onClick={() => selectCustomer(c)}
+                    >
+                      <span className="font-medium">{c.name as string}</span>
+                      <span className="text-muted-foreground">
+                        {c.phone ? formatPhone(c.phone as string) : ""}
+                      </span>
+                    </button>
+                  ))}
+                  {customerLoading && (
+                    <p className="py-3 text-center text-sm text-muted-foreground">검색 중...</p>
+                  )}
+                </div>
+              )}
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Card>
   );
 }

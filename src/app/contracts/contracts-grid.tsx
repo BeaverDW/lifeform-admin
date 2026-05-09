@@ -50,6 +50,7 @@ const RENTAL_COMPANY_MAP: Record<number, string> = {
   10: "위드렌탈",
   20: "렌탈세계",
   30: "에이케이넷",
+  40: "티엘파트너스",
   90: "기타",
 };
 
@@ -500,7 +501,7 @@ ${rows.map((d) => `<tr>
         width: 120,
         editable: true,
         cellEditor: "agSelectCellEditor",
-        cellEditorParams: { values: [10, 20, 30, 90] },
+        cellEditorParams: { values: [10, 20, 30, 40, 90] },
         valueFormatter: (p) => {
           if (p.node?.rowPinned) return "";
           return RENTAL_COMPANY_MAP[p.value] ?? "선택";

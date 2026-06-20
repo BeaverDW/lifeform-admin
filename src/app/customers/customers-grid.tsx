@@ -106,9 +106,22 @@ interface Filters {
   customerName: string;
   phone: string;
   hasContract: "" | "Y" | "N";
+  owner: string;
 }
 
-export function CustomersGrid({ data }: { data: Record<string, unknown>[] }) {
+export function CustomersGrid({
+  data,
+  userMap = {},
+  currentEmail = null,
+  isAdmin = false,
+  users = [],
+}: {
+  data: Record<string, unknown>[];
+  userMap?: Record<string, string>;
+  currentEmail?: string | null;
+  isAdmin?: boolean;
+  users?: { email: string; name: string }[];
+}) {
   const router = useRouter();
   const gridRef = useRef<GridApi | null>(null);
 
@@ -116,6 +129,7 @@ export function CustomersGrid({ data }: { data: Record<string, unknown>[] }) {
     customerName: "",
     phone: "",
     hasContract: "",
+    owner: currentEmail ?? "",
   });
 
   const [filteredCount, setFilteredCount] = useState(data.length);
@@ -304,8 +318,12 @@ ${rows.map((d) => `<tr>
       toast.error("삭제할 행을 선택해주세요.");
       return;
     }
+    if (selected.some((row) => row.created_by !== currentEmail)) {
+      toast.error("본인이 등록한 고객만 삭제할 수 있습니다.");
+      return;
+    }
     setDeleteDialogOpen(true);
-  }, []);
+  }, [currentEmail]);
 
   const executeDelete = useCallback(async () => {
     const api = gridRef.current;
@@ -342,7 +360,7 @@ ${rows.map((d) => `<tr>
   }, [router]);
 
   const isExternalFilterPresent = useCallback(() => {
-    return !!(filters.customerName || filters.phone || filters.hasContract);
+    return !!(filters.customerName || filters.phone || filters.hasContract || filters.owner);
   }, [filters]);
 
   const doesExternalFilterPass = useCallback(
@@ -365,6 +383,9 @@ ${rows.map((d) => `<tr>
         if (Number(d.contract_count ?? 0) === 0) return false;
       } else if (filters.hasContract === "N") {
         if (Number(d.contract_count ?? 0) > 0) return false;
+      }
+      if (filters.owner) {
+        if (String(d.created_by ?? "") !== filters.owner) return false;
       }
 
       return true;
@@ -429,8 +450,22 @@ ${rows.map((d) => `<tr>
         cellStyle: { textAlign: "center" },
         valueFormatter: (p) => (p.value ? formatDate(p.value) : ""),
       },
+      {
+        field: "created_by",
+        headerName: "등록자",
+        width: 100,
+        cellStyle: { textAlign: "center" },
+        valueFormatter: (p) => (p.value ? userMap[p.value] ?? p.value : ""),
+      },
+      {
+        field: "updated_by",
+        headerName: "수정자",
+        width: 100,
+        cellStyle: { textAlign: "center" },
+        valueFormatter: (p) => (p.value ? userMap[p.value] ?? p.value : ""),
+      },
     ],
-    [router]
+    [router, userMap]
   );
 
   const defaultColDef = useMemo<ColDef>(
@@ -529,6 +564,27 @@ ${rows.map((d) => `<tr>
               </SelectContent>
             </Select>
           </div>
+          {isAdmin && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">등록자</Label>
+              <Select
+                value={filters.owner}
+                onValueChange={(v) => updateFilter("owner", v === "all" ? "" : v)}
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="전체" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.email} value={u.email}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* 그리드 */}
@@ -558,10 +614,13 @@ ${rows.map((d) => `<tr>
             }}
             onFilterChanged={recalcCount}
             onRowDoubleClicked={(e) => {
-              if (e.data?.id) {
-                setEditTarget(e.data);
-                setEditDialogOpen(true);
+              if (!e.data?.id) return;
+              if (e.data.created_by !== currentEmail) {
+                toast.error("본인이 등록한 고객만 수정할 수 있습니다.");
+                return;
               }
+              setEditTarget(e.data);
+              setEditDialogOpen(true);
             }}
             isExternalFilterPresent={isExternalFilterPresent}
             doesExternalFilterPass={doesExternalFilterPass}

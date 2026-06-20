@@ -1,9 +1,11 @@
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { createClient } from "@/lib/supabase/server";
+import { getViewerContext } from "@/lib/auth/viewer";
 import { CustomersGrid } from "./customers-grid";
 
 export default async function CustomersPage() {
   const supabase = await createClient();
+  const viewer = await getViewerContext();
   const { data: customers, error } = await supabase
     .from("customers")
     .select("*, contracts(id, is_deleted)")
@@ -32,6 +34,10 @@ export default async function CustomersPage() {
                 ? contracts.filter((c: { is_deleted: boolean }) => !c.is_deleted).length
                 : 0,
             }))}
+            userMap={viewer.userMap}
+            currentEmail={viewer.currentEmail}
+            isAdmin={viewer.isAdmin}
+            users={viewer.users}
           />
         )}
       </div>

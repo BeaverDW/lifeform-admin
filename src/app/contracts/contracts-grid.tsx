@@ -10,6 +10,7 @@ import {
   type IRowNode,
   type CellValueChangedEvent,
   type CellEditingStoppedEvent,
+  type CellClickedEvent,
 } from "ag-grid-community";
 import { createClient } from "@/lib/supabase/client";
 import { FileSpreadsheet, Plus, Printer, Save, Search, Trash2 } from "lucide-react";
@@ -97,9 +98,22 @@ interface Filters {
   installProduct: string;
   bankName: string;
   isDeleted: string;
+  owner: string;
 }
 
-export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
+export function ContractsGrid({
+  data,
+  userMap = {},
+  currentEmail = null,
+  isAdmin = false,
+  users = [],
+}: {
+  data: Record<string, unknown>[];
+  userMap?: Record<string, string>;
+  currentEmail?: string | null;
+  isAdmin?: boolean;
+  users?: { email: string; name: string }[];
+}) {
   const router = useRouter();
   const gridRef = useRef<GridApi | null>(null);
   const [saving, setSaving] = useState(false);
@@ -116,6 +130,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     installProduct: "",
     bankName: "",
     isDeleted: "N",
+    owner: currentEmail ?? "",
   });
 
   useEffect(() => {
@@ -146,6 +161,10 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
       toast.error("삭제할 행을 선택해주세요.");
       return;
     }
+    if (selected.some((row) => !row._tempId && row.created_by !== currentEmail)) {
+      toast.error("본인이 등록한 계약만 삭제할 수 있습니다.");
+      return;
+    }
     for (const row of selected) {
       if (row._tempId) {
         newRowIds.current.delete(row._tempId);
@@ -156,77 +175,88 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
     }
     api.applyTransaction({ remove: selected });
     setDirty(true);
-  }, []);
+  }, [currentEmail]);
 
-  const PAGE_SIZE = 20;
   const [customerModalOpen, setCustomerModalOpen] = useState(false);
-  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerNameKw, setCustomerNameKw] = useState("");
+  const [customerPhoneKw, setCustomerPhoneKw] = useState("");
   const [customerResults, setCustomerResults] = useState<Record<string, unknown>[]>([]);
   const [customerLoading, setCustomerLoading] = useState(false);
-  const [customerHasMore, setCustomerHasMore] = useState(false);
-  const [customerPage, setCustomerPage] = useState(0);
 
-  const openCustomerModal = useCallback(() => {
-    selectingRef.current = false;
-    setCustomerSearch("");
-    setCustomerResults([]);
-    setCustomerHasMore(false);
-    setCustomerPage(0);
-    setCustomerModalOpen(true);
-  }, []);
+  const runCustomerSearch = useCallback(
+    async (nameKw: string, phoneKw: string) => {
+      setCustomerLoading(true);
+      const supabase = createClient();
+      let q = supabase
+        .from("customers")
+        .select("id, name, phone")
+        .eq("created_by", currentEmail ?? "");
+      if (nameKw.trim()) q = q.ilike("name", `%${nameKw.trim()}%`);
+      if (phoneKw.trim()) q = q.ilike("phone", `%${phoneKw.trim()}%`);
+      const { data } = await q.order("name").limit(200);
+      setCustomerResults(data ?? []);
+      setCustomerLoading(false);
+    },
+    [currentEmail]
+  );
 
-  const fetchCustomers = useCallback(async (keyword: string, page: number) => {
-    if (!keyword.trim()) {
+  const openCustomerPicker = useCallback(
+    (node: IRowNode) => {
+      selectingRef.current = false;
+      targetNodeRef.current = node;
+      setCustomerNameKw("");
+      setCustomerPhoneKw("");
       setCustomerResults([]);
-      setCustomerHasMore(false);
-      return;
-    }
-    setCustomerLoading(true);
-    const supabase = createClient();
-    const from = page * PAGE_SIZE;
-    const { data } = await supabase
-      .from("customers")
-      .select("id, name, phone")
-      .or(`name.ilike.%${keyword}%,phone.ilike.%${keyword}%`)
-      .order("name")
-      .range(from, from + PAGE_SIZE);
-    const results = data ?? [];
-    setCustomerHasMore(results.length > PAGE_SIZE);
-    const trimmed = results.slice(0, PAGE_SIZE);
-    if (page === 0) {
-      setCustomerResults(trimmed);
-    } else {
-      setCustomerResults((prev) => [...prev, ...trimmed]);
-    }
-    setCustomerLoading(false);
+      setCustomerModalOpen(true);
+      runCustomerSearch("", "");
+    },
+    [runCustomerSearch]
+  );
+
+  const addBlankRow = useCallback(() => {
+    const api = gridRef.current;
+    if (!api) return;
+    const tempId = `_new_${Date.now()}`;
+    newRowIds.current.add(tempId);
+    // 정렬 해제 + 1페이지 이동 → 새 빈 행이 항상 맨 위에 보이도록
+    api.applyColumnState({ defaultState: { sort: null } });
+    api.applyTransaction({ add: [{ _tempId: tempId }], addIndex: 0 });
+    api.paginationGoToPage(0);
+    setDirty(true);
   }, []);
 
-  const searchCustomers = useCallback((keyword: string) => {
-    setCustomerSearch(keyword);
-    setCustomerPage(0);
-    fetchCustomers(keyword, 0);
-  }, [fetchCustomers]);
-
-  const loadMore = useCallback(() => {
-    const next = customerPage + 1;
-    setCustomerPage(next);
-    fetchCustomers(customerSearch, next);
-  }, [customerPage, customerSearch, fetchCustomers]);
+  const handleCellClicked = useCallback(
+    (e: CellClickedEvent) => {
+      if (e.node?.rowPinned) return;
+      // 고객 선택은 신규행(_tempId)에서만 가능, 저장된 행은 변경 불가
+      if (e.colDef.field === "customer_name" && e.node?.data?._tempId) {
+        openCustomerPicker(e.node);
+      }
+    },
+    [openCustomerPicker]
+  );
 
   const selectingRef = useRef(false);
+  const targetNodeRef = useRef<IRowNode | null>(null);
   const selectCustomer = useCallback((customer: Record<string, unknown>) => {
     if (selectingRef.current) return;
     selectingRef.current = true;
-    const tempId = `_new_${Date.now()}`;
-    const newRow = {
-      _tempId: tempId,
-      customer_id: customer.id,
-      customer_name: customer.name,
-      phone: customer.phone,
-    };
-    newRowIds.current.add(tempId);
-    gridRef.current?.applyTransaction({ add: [newRow], addIndex: 0 });
-    setDirty(true);
+    const node = targetNodeRef.current;
+    if (node) {
+      const updated = {
+        ...node.data,
+        customer_id: customer.id,
+        customer_name: customer.name,
+        phone: customer.phone,
+      };
+      node.setData(updated);
+      if (updated._tempId) {
+        newRowIds.current.add(updated._tempId as string);
+      } else if (updated.id) {
+        modifiedIds.current.add(updated.id as string);
+      }
+      setDirty(true);
+    }
     setCustomerModalOpen(false);
   }, []);
 
@@ -276,6 +306,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
           "설치주소": d.install_address ?? "",
           "은행명": d.bank_name ?? "",
           "계좌번호": d.account_number ?? "",
+          "예금주": d.account_holder ?? "",
           "설치상품": PRODUCT_MAP[d.install_product] ?? "",
           "제품번호": d.product_number ?? "",
           "수당": Number(d.commission ?? 0),
@@ -318,7 +349,7 @@ export function ContractsGrid({ data }: { data: Record<string, unknown>[] }) {
 </style></head><body>
 <h2>계약 목록 (${rows.length}건)</h2>
 <table><thead><tr>
-  <th>렌탈사</th><th>고객이름</th><th>전화번호</th><th>설치주소</th>
+  <th>렌탈사</th><th>고객이름</th><th>전화번호</th><th>설치주소</th><th>예금주</th>
   <th>설치상품</th><th>제품번호</th><th>수당</th><th>사은품</th><th>순익</th><th>설치일</th>
 </tr></thead><tbody>
 ${rows.map((d) => `<tr>
@@ -326,6 +357,7 @@ ${rows.map((d) => `<tr>
   <td>${d.customer_name ?? ""}</td>
   <td>${d.phone ? formatPhone(String(d.phone)) : ""}</td>
   <td>${d.install_address ?? ""}</td>
+  <td>${d.account_holder ?? ""}</td>
   <td>${PRODUCT_MAP[d.install_product as number] ?? ""}</td>
   <td>${d.product_number ?? ""}</td>
   <td class="right">${Number(d.commission ?? 0).toLocaleString("ko-KR")}원</td>
@@ -334,7 +366,7 @@ ${rows.map((d) => `<tr>
   <td>${d.install_date ? formatDate(String(d.install_date)) : ""}</td>
 </tr>`).join("")}
 <tr class="total">
-  <td colspan="6" style="text-align:center">합계</td>
+  <td colspan="7" style="text-align:center">합계</td>
   <td class="right">${totalCommission.toLocaleString("ko-KR")}원</td>
   <td class="right">${totalGift.toLocaleString("ko-KR")}원</td>
   <td class="right">${(totalCommission - totalGift).toLocaleString("ko-KR")}원</td>
@@ -383,6 +415,7 @@ ${rows.map((d) => `<tr>
         install_address: row.install_address || null,
         bank_name: row.bank_name || null,
         account_number: row.account_number || null,
+        account_holder: row.account_holder || null,
         install_product: row.install_product ?? null,
         product_number: row.product_number || null,
         commission: row.commission ?? 0,
@@ -438,7 +471,8 @@ ${rows.map((d) => `<tr>
       filters.customerName ||
       filters.installProduct ||
       filters.bankName ||
-      filters.isDeleted
+      filters.isDeleted ||
+      filters.owner
     );
   }, [filters]);
 
@@ -476,10 +510,20 @@ ${rows.map((d) => `<tr>
       } else if (filters.isDeleted === "Y") {
         if (d.is_deleted !== true) return false;
       }
+      if (filters.owner) {
+        if (String(d.created_by ?? "") !== filters.owner) return false;
+      }
 
       return true;
     },
     [filters]
+  );
+
+  // 편집 가능 여부: 신규행(_tempId) 또는 본인 등록분만 (관리자도 동일)
+  const isRowEditable = useCallback(
+    (p: { data?: Record<string, unknown> }) =>
+      Boolean(p.data?._tempId) || p.data?.created_by === currentEmail,
+    [currentEmail]
   );
 
   const columnDefs = useMemo<ColDef[]>(
@@ -499,7 +543,7 @@ ${rows.map((d) => `<tr>
         field: "rental_company",
         headerName: "렌탈사",
         width: 120,
-        editable: true,
+        editable: isRowEditable,
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: [10, 20, 30, 40, 90] },
         valueFormatter: (p) => {
@@ -517,6 +561,19 @@ ${rows.map((d) => `<tr>
         headerName: "고객이름",
         width: 100,
         editable: false,
+        cellStyle: (p) => {
+          if (p.node?.rowPinned) return null;
+          const isNew = !!p.data?._tempId;
+          return {
+            cursor: isNew ? "pointer" : "default",
+            color: p.value ? "inherit" : "#9ca3af",
+          };
+        },
+        valueFormatter: (p) => {
+          if (p.node?.rowPinned) return "";
+          if (p.value) return String(p.value);
+          return p.data?._tempId ? "고객선택" : "";
+        },
       },
       {
         field: "phone",
@@ -530,7 +587,7 @@ ${rows.map((d) => `<tr>
         field: "birth_date",
         headerName: "생년월일",
         width: 130,
-        editable: true,
+        editable: isRowEditable,
         cellStyle: (p) => ({
           textAlign: "center",
           color: (!p.value && !p.node?.rowPinned) ? "#9ca3af" : "inherit",
@@ -545,14 +602,14 @@ ${rows.map((d) => `<tr>
         field: "install_address",
         headerName: "설치주소",
         width: 200,
-        editable: true,
+        editable: isRowEditable,
         tooltipField: "install_address",
       },
       {
         field: "bank_name",
         headerName: "은행명",
         width: 110,
-        editable: true,
+        editable: isRowEditable,
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: BANK_OPTIONS },
         valueFormatter: (p) => {
@@ -568,14 +625,21 @@ ${rows.map((d) => `<tr>
         field: "account_number",
         headerName: "계좌번호",
         width: 150,
-        editable: true,
+        editable: isRowEditable,
+        cellStyle: { textAlign: "center" },
+      },
+      {
+        field: "account_holder",
+        headerName: "예금주",
+        width: 100,
+        editable: isRowEditable,
         cellStyle: { textAlign: "center" },
       },
       {
         field: "install_product",
         headerName: "설치상품",
         width: 120,
-        editable: true,
+        editable: isRowEditable,
         cellEditor: "agSelectCellEditor",
         cellEditorParams: { values: [10, 20, 30, 40, 50] },
         valueFormatter: (p) => {
@@ -591,13 +655,13 @@ ${rows.map((d) => `<tr>
         field: "product_number",
         headerName: "제품번호",
         width: 130,
-        editable: true,
+        editable: isRowEditable,
       },
       {
         field: "commission",
         headerName: "수당",
         width: 110,
-        editable: true,
+        editable: isRowEditable,
         cellEditor: "agNumberCellEditor",
         valueFormatter: (p) => formatCurrency(p.value),
         cellStyle: { textAlign: "right" },
@@ -606,7 +670,7 @@ ${rows.map((d) => `<tr>
         field: "gift_amount",
         headerName: "사은품",
         width: 110,
-        editable: true,
+        editable: isRowEditable,
         cellEditor: "agNumberCellEditor",
         valueFormatter: (p) => formatCurrency(p.value),
         cellStyle: { textAlign: "right" },
@@ -628,7 +692,7 @@ ${rows.map((d) => `<tr>
         headerName: "설치일",
         width: 130,
         sort: "desc",
-        editable: true,
+        editable: isRowEditable,
         cellStyle: (p) => ({
           textAlign: "center",
           color: (!p.value && !p.node?.rowPinned) ? "#9ca3af" : "inherit",
@@ -639,8 +703,26 @@ ${rows.map((d) => `<tr>
           return p.value ? formatDate(p.value) : "날짜선택";
         },
       },
+      {
+        field: "created_by",
+        headerName: "등록자",
+        width: 100,
+        editable: false,
+        cellStyle: { textAlign: "center" },
+        valueFormatter: (p) =>
+          p.node?.rowPinned ? "" : p.value ? userMap[p.value] ?? p.value : "",
+      },
+      {
+        field: "updated_by",
+        headerName: "수정자",
+        width: 100,
+        editable: false,
+        cellStyle: { textAlign: "center" },
+        valueFormatter: (p) =>
+          p.node?.rowPinned ? "" : p.value ? userMap[p.value] ?? p.value : "",
+      },
     ],
-    []
+    [userMap, isRowEditable]
   );
 
   const defaultColDef = useMemo<ColDef>(
@@ -652,6 +734,25 @@ ${rows.map((d) => `<tr>
       headerClass: "ag-header-cell-center",
       editable: (params) => !params.node.rowPinned,
     }),
+    []
+  );
+
+  // 고객검색 모달 그리드 (읽기전용)
+  const customerColDefs = useMemo<ColDef[]>(
+    () => [
+      { field: "name", headerName: "고객명", flex: 1, minWidth: 120 },
+      {
+        field: "phone",
+        headerName: "전화번호",
+        width: 160,
+        cellStyle: { textAlign: "center" },
+        valueFormatter: (p) => (p.value ? formatPhone(String(p.value)) : ""),
+      },
+    ],
+    []
+  );
+  const customerDefaultColDef = useMemo<ColDef>(
+    () => ({ editable: false, sortable: true, resizable: true }),
     []
   );
 
@@ -667,7 +768,7 @@ ${rows.map((d) => `<tr>
             <div className="flex items-center gap-1">
               <Tooltip>
                 <TooltipTrigger asChild>
-                  <Button size="icon-sm" variant="outline" onClick={openCustomerModal}>
+                  <Button size="icon-sm" variant="outline" onClick={addBlankRow}>
                     <Plus className="size-4" />
                   </Button>
                 </TooltipTrigger>
@@ -825,6 +926,28 @@ ${rows.map((d) => `<tr>
               </SelectContent>
             </Select>
           </div>
+
+          {isAdmin && (
+            <div className="space-y-1">
+              <Label className="text-xs text-muted-foreground">등록자</Label>
+              <Select
+                value={filters.owner}
+                onValueChange={(v) => updateFilter("owner", v === "all" ? "" : v)}
+              >
+                <SelectTrigger className="w-[130px]">
+                  <SelectValue placeholder="전체" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">전체</SelectItem>
+                  {users.map((u) => (
+                    <SelectItem key={u.email} value={u.email}>
+                      {u.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
         </div>
 
         {/* 그리드 */}
@@ -852,64 +975,76 @@ ${rows.map((d) => `<tr>
             doesExternalFilterPass={doesExternalFilterPass}
             onCellValueChanged={onCellValueChanged}
             onCellEditingStopped={onCellEditingStopped}
+            onCellClicked={handleCellClicked}
           />
         </div>
       </CardContent>
 
       {/* 고객 검색 모달 */}
       <Dialog open={customerModalOpen} onOpenChange={setCustomerModalOpen}>
-        <DialogContent className="sm:max-w-md">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>고객 검색</DialogTitle>
           </DialogHeader>
           <div className="space-y-4">
-            <div className="relative">
-              <Search className="absolute left-3 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                className="pl-9"
-                placeholder="이름 또는 전화번호로 검색"
-                value={customerSearch}
-                onChange={(e) => searchCustomers(e.target.value)}
-                autoFocus
+            {/* 조회조건 */}
+            <div className="flex flex-wrap items-end gap-3">
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">고객명</Label>
+                <Input
+                  className="w-[160px]"
+                  placeholder="고객명"
+                  value={customerNameKw}
+                  onChange={(e) => setCustomerNameKw(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runCustomerSearch(customerNameKw, customerPhoneKw);
+                  }}
+                  autoFocus
+                />
+              </div>
+              <div className="space-y-1">
+                <Label className="text-xs text-muted-foreground">전화번호</Label>
+                <Input
+                  className="w-[160px]"
+                  placeholder="전화번호"
+                  value={customerPhoneKw}
+                  onChange={(e) => setCustomerPhoneKw(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") runCustomerSearch(customerNameKw, customerPhoneKw);
+                  }}
+                />
+              </div>
+              <Button
+                variant="outline"
+                onClick={() => runCustomerSearch(customerNameKw, customerPhoneKw)}
+              >
+                <Search className="size-4" /> 조회
+              </Button>
+            </div>
+            {/* 그리드 */}
+            <style>{`
+              .customer-picker-grid .ag-header-cell-label { justify-content: center; }
+              .customer-picker-grid .ag-header-cell-text { font-weight: 700; }
+            `}</style>
+            <div className="customer-picker-grid h-[360px] w-full">
+              <AgGridReact
+                modules={[AllCommunityModule]}
+                rowData={customerResults}
+                columnDefs={customerColDefs}
+                defaultColDef={customerDefaultColDef}
+                pagination={true}
+                paginationPageSize={20}
+                onRowDoubleClicked={(e) => {
+                  if (e.data) selectCustomer(e.data);
+                }}
+                overlayNoRowsTemplate={
+                  customerLoading ? "검색 중..." : "검색 결과가 없습니다."
+                }
               />
             </div>
-            <div
-              className="max-h-[300px] overflow-y-auto"
-              onScroll={(e) => {
-                const el = e.currentTarget;
-                if (
-                  customerHasMore &&
-                  !customerLoading &&
-                  el.scrollTop + el.clientHeight >= el.scrollHeight - 10
-                ) {
-                  loadMore();
-                }
-              }}
-            >
-              {customerResults.length === 0 && !customerLoading ? (
-                <p className="py-4 text-center text-sm text-muted-foreground">
-                  {customerSearch ? "검색 결과가 없습니다." : "이름 또는 전화번호를 입력하세요."}
-                </p>
-              ) : (
-                <div className="divide-y">
-                  {customerResults.map((c) => (
-                    <button
-                      key={c.id as string}
-                      className="flex w-full items-center justify-between px-3 py-2.5 text-sm hover:bg-muted/50 rounded-md"
-                      onClick={() => selectCustomer(c)}
-                    >
-                      <span className="font-medium">{c.name as string}</span>
-                      <span className="text-muted-foreground">
-                        {c.phone ? formatPhone(c.phone as string) : ""}
-                      </span>
-                    </button>
-                  ))}
-                  {customerLoading && (
-                    <p className="py-3 text-center text-sm text-muted-foreground">검색 중...</p>
-                  )}
-                </div>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              행을 더블클릭하면 해당 고객으로 선택됩니다.
+            </p>
           </div>
         </DialogContent>
       </Dialog>

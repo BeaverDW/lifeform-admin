@@ -41,5 +41,11 @@ yarn-error.log*
 next-env.d.ts
 .playwright-mcp/
 
+# Claude Code (local settings / dev config)
+.claude/
+
+# Supabase migrations (시드에 PII 포함 — public 레포라 커밋 제외)
+/supabase/
+
 # IDE
 .idea/

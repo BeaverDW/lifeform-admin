@@ -1,9 +1,11 @@
 import { AdminLayout } from "@/components/layout/admin-layout";
 import { createClient } from "@/lib/supabase/server";
+import { getViewerContext } from "@/lib/auth/viewer";
 import { ContractsGrid } from "./contracts-grid";
 
 export default async function ContractsPage() {
   const supabase = await createClient();
+  const viewer = await getViewerContext();
   const { data: contracts, error } = await supabase
     .from("contracts")
     .select("*")
@@ -24,7 +26,13 @@ export default async function ContractsPage() {
             데이터를 불러오는 중 오류가 발생했습니다.
           </p>
         ) : (
-          <ContractsGrid data={contracts ?? []} />
+          <ContractsGrid
+            data={contracts ?? []}
+            userMap={viewer.userMap}
+            currentEmail={viewer.currentEmail}
+            isAdmin={viewer.isAdmin}
+            users={viewer.users}
+          />
         )}
       </div>
     </AdminLayout>
